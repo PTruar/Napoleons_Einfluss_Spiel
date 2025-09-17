@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zuordnungsspiel: Zeitstrahl 1794–1819</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#0b1328; --muted:#111827; --ink:#e5e7eb;
+    --accent:#38bdf8; --ok:#22c55e; --bad:#ef4444; --rail:#f59e0b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background:linear-gradient(180deg,#0b1224,#0f172a); color:var(--ink)}
+  header{padding:20px 16px; text-align:center}
+  h1{margin:0 0 6px; font-size:clamp(22px,3vw,36px)}
+  .sub{opacity:.85; font-size:14px}
+  .shell{max-width:1200px; margin:0 auto; padding:16px}
+  .controls{display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin:10px 0 18px}
+  button{background:var(--muted); color:var(--ink); border:1px solid #374151; padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:600}
+  button:hover{border-color:var(--accent)}
+
+  /* === ZEITSTRAHL (oben) === */
+  .timeline{position:relative; background:var(--panel); border:1px solid #1f2937; border-radius:16px; padding:18px 12px 24px}
+  .rail{position:absolute; left:24px; right:24px; top:64px; height:4px; background:linear-gradient(90deg,rgba(245,158,11,.2), var(--rail), rgba(245,158,11,.2)); border-radius:3px}
+  .years{display:flex; gap:24px; overflow-x:auto; padding:0 8px 8px}
+  .knot{flex:0 0 160px; display:flex; flex-direction:column; align-items:center}
+  .dot{width:14px; height:14px; border-radius:999px; background:var(--rail); border:2px solid #78350f; box-shadow:0 0 0 3px rgba(245,158,11,.15)}
+  .yearlbl{margin-top:6px; font-weight:800; color:#cbd5e1}
+  .dropzone{margin-top:10px; min-height:110px; width:100%; background:#0a162c; border:1px dashed #334155; border-radius:12px; padding:8px; display:flex; flex-wrap:wrap; gap:8px}
+  .knot[data-target="true"] .dropzone{outline:2px solid var(--accent)}
+
+  /* === BANK (unten) === */
+  .bank{margin-top:14px; background:var(--panel); border:1px solid #1f2937; border-radius:16px; padding:12px}
+  .columns{display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px}
+  .col h4{margin:2px 0 8px; font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8}
+  .bin{display:flex; flex-wrap:wrap; gap:8px}
+
+  /* Karten */
+  .card{user-select:none; background:#0f1b33; border:1px solid #1f2a44; border-radius:12px; padding:10px; box-shadow:0 8px 30px rgba(0,0,0,.25); cursor:grab; font-size:14px}
+  .card:active{cursor:grabbing}
+  .card strong{display:block; font-size:12px; opacity:.8; margin-bottom:2px}
+  .card[data-selected="true"]{outline:2px solid var(--accent)}
+  .card[data-correct="true"]{border-color:var(--ok); box-shadow:0 0 0 2px rgba(34,197,94,.25)}
+  .card[data-correct="false"]{border-color:var(--bad); box-shadow:0 0 0 2px rgba(239,68,68,.25)}
+
+  .footer{display:flex; justify-content:space-between; gap:10px; align-items:center; margin-top:10px}
+  .score{font-weight:700}
+  .legend{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+  .key{display:flex; align-items:center; gap:6px; font-size:12px}
+  .dotkey{width:10px; height:10px; border-radius:999px}
+  .ok{background:var(--ok)} .bad{background:var(--bad)}
+  .toast{position:fixed; right:16px; bottom:16px; background:#0b1328; border:1px solid #1f2937; border-radius:12px; padding:10px 14px; opacity:0; transform:translateY(6px); transition:all .2s}
+  .toast.show{opacity:1; transform:none}
+</style>
+</head>
+<body>
+  <header>
+    <h1>Zuordnungsspiel: Zeitstrahl 1794–1819</h1>
+    <div class="sub">Ordne <b>Begriffe</b>, <b>Ereignisse</b> und <b>Erklärungen</b> dem richtigen <b>Jahr</b> des Zeitstrahls zu. <b>Drag & Drop</b> oder <b>Karte markieren → auf Jahr klicken</b>.</div>
+  </header>
+
+  <div class="shell">
+    <div class="controls">
+      <button id="check">Antworten prüfen</button>
+      <button id="hint">Hinweis</button>
+      <button id="reset">Zurücksetzen</button>
+      <button id="shuffle">Mischen</button>
+    </div>
+
+    <!-- ZEITSTRAHL OBEN -->
+    <section class="timeline">
+      <div class="rail" aria-hidden="true"></div>
+      <div class="years" id="years"></div>
+      <div class="footer">
+        <div class="score" id="score">0 / 0 korrekt</div>
+        <div class="legend">
+          <span class="key"><span class="dotkey ok"></span> richtig</span>
+          <span class="key"><span class="dotkey bad"></span> falsch</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- BANK UNTEN -->
+    <aside class="bank">
+      <div class="columns">
+        <div class="col">
+          <h4>Ereignisse</h4>
+          <div class="bin" id="col-events"></div>
+        </div>
+        <div class="col">
+          <h4>Erklärungen</h4>
+          <div class="bin" id="col-expl"></div>
+        </div>
+        <div class="col">
+          <h4>Begriffe</h4>
+          <div class="bin" id="col-terms"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// === Daten ===============================================================
+const YEAR_BOXES = [1794,1797,1801,1803,1804,1806,1807,1812,1813,1815,1817,1819];
+
+const items = [
+  // Begriffe
+  {id:"t-sek", type:"Begriff", text:"Säkularisation", year:1803},
+  {id:"t-med", type:"Begriff", text:"Mediatisierung", year:1803},
+  {id:"t-code", type:"Begriff", text:"Code Civil", year:1804},
+  {id:"t-rhein", type:"Begriff", text:"Rheinbund", year:1806},
+  {id:"t-stein", type:"Begriff", text:"Stein–Hardenberg-Reformen", year:1807},
+  {id:"t-resta", type:"Begriff", text:"Restauration", year:1815},
+  // Ereignisse
+  {id:"e-1794", type:"Ereignis", text:"Frz. Besetzung links des Rheins", year:1794},
+  {id:"e-campo", type:"Ereignis", text:"Frieden von Campo Formio", year:1797},
+  {id:"e-lune", type:"Ereignis", text:"Frieden von Lunéville", year:1801},
+  {id:"e-hrr", type:"Ereignis", text:"Ende des Alten Reiches / Rheinbund", year:1806},
+  {id:"e-tilsit", type:"Ereignis", text:"Frieden von Tilsit", year:1807},
+  {id:"e-1812", type:"Ereignis", text:"Russlandfeldzug", year:1812},
+  {id:"e-1813", type:"Ereignis", text:"Völkerschlacht bei Leipzig", year:1813},
+  {id:"e-1815", type:"Ereignis", text:"Wiener Kongress/Deutscher Bund", year:1815},
+  {id:"e-1817", type:"Ereignis", text:"Wartburgfest", year:1817},
+  {id:"e-1819", type:"Ereignis", text:"Karlsbader Beschlüsse", year:1819},
+  // Erklärungen
+  {id:"x-1794", type:"Erklärung", text:"Französische Verwaltung auf dem linken Rheinufer", year:1794},
+  {id:"x-1801", type:"Erklärung", text:"Rhein als Westgrenze Frankreichs bestätigt", year:1801},
+  {id:"x-1803", type:"Erklärung", text:"Kirchlicher Besitz an weltliche Fürsten; Reichsstädte verlieren Selbstständigkeit", year:1803},
+  {id:"x-1804", type:"Erklärung", text:"Gleichheit vor dem Gesetz, Eigentum, Vertragsfreiheit", year:1804},
+  {id:"x-1806", type:"Erklärung", text:"Napoleon formt abhängigen Staatenbund – Druck auf Preußen", year:1806},
+  {id:"x-1807", type:"Erklärung", text:"Bauernbefreiung, Städteordnung, Wehrpflicht in Preußen", year:1807},
+  {id:"x-1813", type:"Erklärung", text:"Koalition schlägt Napoleon – Beginn seines Niedergangs", year:1813},
+  {id:"x-1815", type:"Erklärung", text:"Ordnung Europas; Deutscher Bund entsteht", year:1815},
+  {id:"x-1817", type:"Erklärung", text:"Studierende fordern Einheit & Freiheitsrechte", year:1817},
+  {id:"x-1819", type:"Erklärung", text:"Zensur & Überwachung gegen liberale/nationale Bewegung", year:1819}
+];
+
+// === Hilfsfunktionen =====================================================
+const $ = s => document.querySelector(s);
+const yearsWrap = $('#years');
+const bankTerms = $('#col-terms');
+const bankEvents = $('#col-events');
+const bankExpl = $('#col-expl');
+const scoreEl = $('#score');
+const toast = $('#toast');
+
+function toastMsg(msg){toast.textContent = msg; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), 1800);}
+function el(tag, opts={}){const n=document.createElement(tag); Object.assign(n, opts); return n;}
+
+// === Zeitstrahl aufbauen (links → rechts) ================================
+const yearBoxes = new Map();
+YEAR_BOXES.forEach(y=>{
+  const knot = el('div', {className:'knot', id:`year-${y}`});
+  const dot = el('div', {className:'dot', title:y});
+  const lbl = el('div', {className:'yearlbl'}); lbl.textContent = y;
+  const dz = el('div', {className:'dropzone'});
+  knot.dataset.year = y; knot.append(dot,lbl,dz);
+
+  knot.addEventListener('dragover', e=>{e.preventDefault(); knot.dataset.target='true'});
+  knot.addEventListener('dragleave', ()=>{knot.dataset.target='false'});
+  knot.addEventListener('drop', e=>{e.preventDefault(); knot.dataset.target='false'; const id=e.dataTransfer.getData('text/plain'); const node=document.getElementById(id); node && dz.appendChild(node); node?.removeAttribute('data-selected');});
+  knot.addEventListener('click', ()=>{const sel=document.querySelector('.card[data-selected="true"]'); if(sel){dz.appendChild(sel); sel.removeAttribute('data-selected');}});
+
+  yearsWrap.appendChild(knot); yearBoxes.set(y, dz);
+});
+
+// === Karten erzeugen (ohne "Soll"-Anzeige) ===============================
+function makeCard(it){
+  const n = el('div', {className:'card', id:it.id, draggable:true});
+  n.dataset.year = it.year; n.dataset.type = it.type;
+  n.innerHTML = `<strong>${it.type}</strong>${it.text}`;
+  n.addEventListener('dragstart', e=> e.dataTransfer.setData('text/plain', it.id));
+  n.addEventListener('dblclick', ()=> addToBank(n));
+  n.addEventListener('click', ()=>{const sel=document.querySelector('.card[data-selected="true"]'); if(sel&&sel!==n) sel.removeAttribute('data-selected'); n.dataset.selected = n.dataset.selected==='true'?'false':'true';});
+  return n;
+}
+function addToBank(node){ node.removeAttribute('data-selected'); node.removeAttribute('data-correct'); const t=node.dataset.type; (t==='Begriff'?bankTerms:(t==='Ereignis'?bankEvents:bankExpl)).appendChild(node); }
+
+const nodes = items.map(makeCard);
+shuffle(nodes).forEach(n=> addToBank(n));
+updateScore();
+
+// === Buttons =============================================================
+$('#check').addEventListener('click', ()=>{
+  let correct=0,total=nodes.length; nodes.forEach(n=>{ const y=n.closest('.knot')?.dataset.year; if(y){ const ok=Number(y)===Number(n.dataset.year); n.dataset.correct = ok?'true':'false'; if(ok) correct++; } else { n.removeAttribute('data-correct'); } });
+  updateScore(correct,total); toastMsg(`Auswertung: ${correct} von ${total} korrekt.`);
+});
+$('#hint').addEventListener('click', ()=>{
+  const pool = nodes.filter(n=> Number(n.closest('.knot')?.dataset.year||0) !== Number(n.dataset.year));
+  if(pool.length===0) return toastMsg('Alle Karten liegen richtig.');
+  const pick = pool[Math.floor(Math.random()*pool.length)]; const y=Number(pick.dataset.year); yearBoxes.get(y).appendChild(pick); pick.dataset.correct='true'; pick.removeAttribute('data-selected'); updateScore(); toastMsg('Hinweis gesetzt.');
+});
+$('#reset').addEventListener('click', ()=>{ nodes.forEach(n=> addToBank(n)); updateScore(0,nodes.length); });
+$('#shuffle').addEventListener('click', ()=>{ shuffle(nodes).forEach(n=> addToBank(n)); updateScore(); });
+
+function updateScore(manualCorrect, manualTotal){ let correct=0,total=nodes.length; nodes.forEach(n=>{ const y=n.closest('.knot')?.dataset.year; if(y&&Number(y)===Number(n.dataset.year)) correct++; }); scoreEl.textContent = `${manualCorrect ?? correct} / ${manualTotal ?? total} korrekt`; }
+function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+</script>
+</body>
+</html>
